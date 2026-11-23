@@ -58,6 +58,8 @@ export function LeagueTable({
 }) {
   const isGroupMarkers = markers === 'group';
   const showDivider = !isGroupMarkers && rows.length > qualifiers;
+  // Group tables show GF/GA instead of GD — always on for them, regardless of the showGoals prop.
+  const showGoalsCols = showGoals || isGroupMarkers;
 
   return (
     <>
@@ -66,7 +68,7 @@ export function LeagueTable({
           <h3>Group {group}</h3>
         </div>
       ) : null}
-      <div className={`ltable${showGoals ? '' : ' ltable--no-goals'}`}>
+      <div className={`ltable${showGoalsCols ? '' : ' ltable--no-goals'}`}>
       <div className="ltable-header">
         <span>#</span>
         <span aria-hidden="true" />
@@ -76,9 +78,9 @@ export function LeagueTable({
         <span className="ltable-head-center ltable-head--w">W</span>
         <span className="ltable-head-center ltable-head--d">D</span>
         <span className="ltable-head-center ltable-head--l">L</span>
-        {showGoals ? <span className="ltable-head-center ltable-head--gf">GF</span> : null}
-        {showGoals ? <span className="ltable-head-center ltable-head--ga">GA</span> : null}
-        <span className="ltable-head-center">GD</span>
+        {showGoalsCols ? <span className="ltable-head-center ltable-head--gf">GF</span> : null}
+        {showGoalsCols ? <span className="ltable-head-center ltable-head--ga">GA</span> : null}
+        {!isGroupMarkers ? <span className="ltable-head-center">GD</span> : null}
         <span>Pts</span>
       </div>
 
@@ -140,17 +142,24 @@ export function LeagueTable({
               <span className="ltable-stat ltable-stat--w">{row.won}</span>
               <span className="ltable-stat ltable-stat--d">{row.drawn}</span>
               <span className="ltable-stat ltable-stat--l">{row.lost}</span>
-              {showGoals ? <span className="ltable-stat ltable-stat--gf">{row.goalsFor}</span> : null}
-              {showGoals ? <span className="ltable-stat ltable-stat--ga">{row.goalsAgainst}</span> : null}
-              <span className="ltable-stat">
-                {row.goalDiff > 0 ? `+${row.goalDiff}` : row.goalDiff < 0 ? `−${Math.abs(row.goalDiff)}` : '0'}
-              </span>
+              {showGoalsCols ? <span className="ltable-stat ltable-stat--gf">{row.goalsFor}</span> : null}
+              {showGoalsCols ? <span className="ltable-stat ltable-stat--ga">{row.goalsAgainst}</span> : null}
+              {!isGroupMarkers ? (
+                <span className="ltable-stat">
+                  {row.goalDiff > 0 ? `+${row.goalDiff}` : row.goalDiff < 0 ? `−${Math.abs(row.goalDiff)}` : '0'}
+                </span>
+              ) : null}
               <span className={`ltable-pts${leader ? ' ltable-pts--leader' : ''}`}>{row.points}</span>
             </div>
           </div>
         );
       })}
       </div>
+      {isGroupMarkers && group === 'B' ? (
+        <p style={{ fontSize: '0.75rem', color: 'var(--color-muted)', margin: '0.5rem 1rem 0' }}>
+          Ties: points &rarr; goals scored &rarr; goals conceded &rarr; head-to-head
+        </p>
+      ) : null}
     </>
   );
 }

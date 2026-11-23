@@ -1,4 +1,5 @@
 import type { Badge, ChaserRow, Fixture, Side, TableRowData, Tie } from './types';
+import type { GroupTableRowData } from './data';
 
 type TeamKey = 'acm' | 'mun' | 'rma' | 'liv' | 'bar' | 'ars' | 'fcb' | 'juv' | 'psg' | 'int' | 'che' | 'atm' | 'bvb' | 'nap' | 'gla';
 
@@ -57,7 +58,7 @@ const tableData: Array<[TeamKey, string, number, number, number, string, number,
 ];
 
 function buildTableRows(
-  data: Array<[TeamKey, string, number, number, number, string, number, 'up' | 'down' | 'same']>,
+  data: Array<[TeamKey, string, number, number, number, string, number, 'up' | 'down' | 'same', number?]>,
   qualifiers: number,
 ): TableRowData[] {
   return data.map((d, i) => {
@@ -85,35 +86,40 @@ function buildTableRows(
 
 export const sampleTableRows10: TableRowData[] = buildTableRows(tableData, 8);
 
-const tableData14: Array<[TeamKey, string, number, number, number, string, number, 'up' | 'down' | 'same']> = [
-  ['acm', 'Adhil', 3, 3, 0, '+8', 9, 'up'],
-  ['che', 'Shahal', 3, 3, 0, '+5', 9, 'up'],
-  ['mun', 'Rahul', 3, 2, 1, '+4', 7, 'down'],
-  ['liv', 'Faiz', 3, 2, 0, '+3', 6, 'same'],
-  ['bvb', 'Jamshid', 3, 2, 0, '+1', 6, 'up'],
-  ['rma', 'Sameer', 3, 1, 2, '+2', 5, 'down'],
-  ['bar', 'Nikhil', 3, 1, 1, '+1', 4, 'up'],
-  ['atm', 'Sinan', 3, 1, 1, '0', 4, 'down'],
-  ['fcb', 'Vivek', 3, 1, 0, '−1', 3, 'same'],
-  ['nap', 'Khadar', 3, 0, 2, '−2', 2, 'up'],
-  ['int', 'Jouhar', 3, 0, 1, '−3', 1, 'down'],
-  ['ars', 'Imran', 3, 0, 1, '−5', 1, 'down'],
-  ['juv', 'Kiran', 3, 0, 1, '−6', 1, 'same'],
-  ['psg', 'Arjun', 3, 0, 0, '−7', 0, 'down'],
+const tableData14: Array<[TeamKey, string, number, number, number, string, number, 'up' | 'down' | 'same', number]> = [
+  // [key, player, played, won, drawn, goalDiff, points, movement, goalsFor] — goalsAgainst = goalsFor - goalDiff
+  ['acm', 'Adhil', 3, 3, 0, '+8', 9, 'up', 11],
+  ['che', 'Shahal', 3, 3, 0, '+5', 9, 'up', 9],
+  ['mun', 'Rahul', 3, 2, 1, '+4', 7, 'down', 8],
+  ['liv', 'Faiz', 3, 2, 0, '+3', 6, 'same', 7],
+  ['bvb', 'Jamshid', 3, 2, 0, '+1', 6, 'up', 6],
+  ['rma', 'Sameer', 3, 1, 2, '+2', 5, 'down', 7],
+  ['bar', 'Nikhil', 3, 1, 1, '+1', 4, 'up', 6],
+  ['atm', 'Sinan', 3, 1, 1, '0', 4, 'down', 5],
+  ['fcb', 'Vivek', 3, 1, 0, '−1', 3, 'same', 4],
+  ['nap', 'Khadar', 3, 0, 2, '−2', 2, 'up', 3],
+  ['int', 'Jouhar', 3, 0, 1, '−3', 1, 'down', 3],
+  ['ars', 'Imran', 3, 0, 1, '−5', 1, 'down', 2],
+  ['juv', 'Kiran', 3, 0, 1, '−6', 1, 'same', 2],
+  ['psg', 'Arjun', 3, 0, 0, '−7', 0, 'down', 1],
 ];
 
 export const sampleTableRows14: TableRowData[] = buildTableRows(tableData14, 8);
 
 /** Group-stage sample rows: the same 14-player sample data, split into two groups of 7, each
- * re-ranked 1-7 with the group position tiers (top 3 / mid 4-5 / out 6-7). */
+ * re-ranked 1-7 with the group position tiers (top 3 / mid 4-5 / out 6-7). Movement (matchday
+ * 1 has none — getGroupTablesData clears it for that case) and goalsFor/goalsAgainst come along
+ * with the row, since group tables show GF/GA instead of goal difference. */
 function buildGroupTableRows(
-  data: Array<[TeamKey, string, number, number, number, string, number, 'up' | 'down' | 'same']>,
-): TableRowData[] {
+  data: Array<[TeamKey, string, number, number, number, string, number, 'up' | 'down' | 'same', number]>,
+): GroupTableRowData[] {
   return data.map((d, i) => {
     const pos = i + 1;
     const [w, drawn] = [d[3], d[4]];
     const played = d[2];
     const lost = played - w - drawn;
+    const goalDiff = Number(d[5].replace('−', '-'));
+    const goalsFor = d[8];
     return {
       ...TEAMS[d[0]],
       pos,
@@ -122,9 +128,11 @@ function buildGroupTableRows(
       won: w,
       drawn,
       lost,
-      goalDiff: Number(d[5].replace('−', '-')),
+      goalDiff,
+      goalsFor,
+      goalsAgainst: goalsFor - goalDiff,
       points: d[6],
-      movement: null,
+      movement: d[7],
       qualifies: pos <= 3,
       isLeader: pos === 1,
       cutBefore: false,
@@ -133,8 +141,8 @@ function buildGroupTableRows(
   });
 }
 
-export const sampleGroupTableRowsA: TableRowData[] = buildGroupTableRows(tableData14.slice(0, 7));
-export const sampleGroupTableRowsB: TableRowData[] = buildGroupTableRows(tableData14.slice(7, 14));
+export const sampleGroupTableRowsA: GroupTableRowData[] = buildGroupTableRows(tableData14.slice(0, 7));
+export const sampleGroupTableRowsB: GroupTableRowData[] = buildGroupTableRows(tableData14.slice(7, 14));
 
 export const sampleQualifierTies: Tie[] = [
   { label: 'QUALIFIER 1', home: side('bar', 'Nikhil'), away: side('int', 'Jouhar') },

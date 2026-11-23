@@ -16,7 +16,7 @@ import { fetchSeasonCompetition, type SeasonCompetition, type SeasonPlayer, type
 import { isCountedMatch } from '@/lib/matchday-status';
 import { initialsFor } from '@/lib/crest';
 import { formatMatchdayDeadline } from '@/lib/format-deadline';
-import type { Badge, ChaserRow, Fixture, Side, TableRowData, Tie } from './types';
+import type { Badge, ChaserRow, Fixture, Movement, Side, TableRowData, Tie } from './types';
 import * as sample from './sample-data';
 
 function isUsableImage(url: string | null | undefined): url is string {
@@ -196,7 +196,11 @@ export async function getMatchdayTableData(matchday: number, useSample: boolean)
 // Group-stage tables (Group A / Group B)
 // ---------------------------------------------------------------------------
 
-export type GroupTablesData = { matchday: number; groupA: TableRowData[]; groupB: TableRowData[] };
+/** Group-stage table row: the base poster row shape plus the raw goals a group table displays
+ * instead of goal difference (goalDiff is still populated for type compatibility, just unused). */
+export type GroupTableRowData = TableRowData & { goalsFor: number; goalsAgainst: number };
+
+export type GroupTablesData = { matchday: number; groupA: GroupTableRowData[]; groupB: GroupTableRowData[] };
 
 /** A group's standing rows, each player's stats aggregated from ALL of their matches (including
  * cross-group ones), but only that group's players listed, ranked with the group tie-break order. */
@@ -205,7 +209,41 @@ function groupRows(letter: 'A' | 'B', comp: SeasonCompetition, allRows: Standing
   return rankGroup(allRows.filter((r) => ids.has(r.playerId)), comp.matches, comp.points);
 }
 
-function toGroupTableRows(ranked: StandingRow[], players: Map<PlayerId, SeasonPlayer>): TableRowData[] {
+/** That group's ranking (via `rankGroup`) using only matches up to and including `matchday`. */
+function groupPositionsAtMatchday(
+  letter: 'A' | 'B',
+  comp: SeasonCompetition,
+  matchday: number,
+): Map<PlayerId, number> {
+  const upTo = comp.matches.filter((m) => m.matchday <= matchday);
+  const allRows = computeStandings(comp.players.map((p) => p.id), upTo, comp.points);
+  const ranked = groupRows(letter, { ...comp, matches: upTo }, allRows);
+  const out = new Map<PlayerId, number>();
+  ranked.forEach((row, i) => out.set(row.playerId, i + 1));
+  return out;
+}
+
+/** Per-player movement within their own group (rankGroup position) between matchday-1 and
+ * matchday. Empty on matchday 1 — there's no earlier group ranking to compare against. */
+function groupMovement(letter: 'A' | 'B', comp: SeasonCompetition, matchday: number): Record<PlayerId, Movement> {
+  const out: Record<PlayerId, Movement> = {};
+  if (matchday <= 1) return out;
+
+  const before = groupPositionsAtMatchday(letter, comp, matchday - 1);
+  const after = groupPositionsAtMatchday(letter, comp, matchday);
+  for (const [id, now] of after) {
+    const prev = before.get(id);
+    if (prev == null) continue;
+    out[id] = now < prev ? 'up' : now > prev ? 'down' : 'same';
+  }
+  return out;
+}
+
+function toGroupTableRows(
+  ranked: StandingRow[],
+  players: Map<PlayerId, SeasonPlayer>,
+  movement: Record<PlayerId, Movement>,
+): GroupTableRowData[] {
   return ranked.map((row, i) => {
     const pos = i + 1;
     const player = players.get(row.playerId);
@@ -218,8 +256,10 @@ function toGroupTableRows(ranked: StandingRow[], players: Map<PlayerId, SeasonPl
       drawn: row.drawn,
       lost: row.lost,
       goalDiff: row.goalDiff,
+      goalsFor: row.goalsFor,
+      goalsAgainst: row.goalsAgainst,
       points: row.points,
-      movement: null,
+      movement: movement[row.playerId] ?? null,
       qualifies: pos <= 3,
       isLeader: pos === 1,
       cutBefore: false,
@@ -230,7 +270,14 @@ function toGroupTableRows(ranked: StandingRow[], players: Map<PlayerId, SeasonPl
 
 export async function getGroupTablesData(matchday: number, useSample: boolean): Promise<GroupTablesData | null> {
   if (useSample) {
-    return { matchday, groupA: sample.sampleGroupTableRowsA, groupB: sample.sampleGroupTableRowsB };
+    // Sample rows carry movement for matchday > 1; matchday 1 has no prior round to compare against.
+    const clearMovement = (rows: GroupTableRowData[]) =>
+      matchday <= 1 ? rows.map((r) => ({ ...r, movement: null })) : rows;
+    return {
+      matchday,
+      groupA: clearMovement(sample.sampleGroupTableRowsA),
+      groupB: clearMovement(sample.sampleGroupTableRowsB),
+    };
   }
   const comp = await loadCompetition();
   if (!comp) return null;
@@ -243,8 +290,8 @@ export async function getGroupTablesData(matchday: number, useSample: boolean): 
 
   return {
     matchday,
-    groupA: toGroupTableRows(groupRows('A', comp, allRows), players),
-    groupB: toGroupTableRows(groupRows('B', comp, allRows), players),
+    groupA: toGroupTableRows(groupRows('A', comp, allRows), players, groupMovement('A', comp, matchday)),
+    groupB: toGroupTableRows(groupRows('B', comp, allRows), players, groupMovement('B', comp, matchday)),
   };
 }
 
