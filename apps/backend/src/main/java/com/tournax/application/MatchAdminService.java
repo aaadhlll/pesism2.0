@@ -155,9 +155,7 @@ public class MatchAdminService {
                 MatchStatsMapper.toInput(matchStatsRepository.findById(matchId).orElse(null))
             );
 
-        match.setHomeGoals(body.homeGoals());
-        match.setAwayGoals(body.awayGoals());
-        match.touchUpdatedAt(clock.instant());
+        match.applyAdminResult(body.homeGoals(), body.awayGoals(), clock.instant());
         footballMatchRepository.save(match);
 
         if (body.stats() != null && hasAnyStat(body.stats())) {
